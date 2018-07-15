@@ -17,7 +17,7 @@ public enum Options {
     LOG_LEVEL(Level.INFO),
     SERVER_PORT(80),
     SO_TIMEOUT(600000),
-    AWAIT_CONNECTION_SHUTDOWN_TIMEOUT(500),
+    AWAIT_CONNECTION_SHUTDOWN_TIMEOUT(1000),
     SSL_KEYSTORE(Paths.get("keystore.pfx")),
     SSL_KEYSTORE_PASS(""),
     ROOT_DIR(Paths.get("/beetle")),

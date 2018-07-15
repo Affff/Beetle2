@@ -7,6 +7,7 @@ import java.net.SocketException;
 import java.security.GeneralSecurityException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicLong;
 
 import javax.annotation.Nonnull;
@@ -140,29 +141,33 @@ public class BeetleServer implements Closeable {
     }
 
     private void proceed(@Nonnull final Socket accept) {
-        listenerExecutorService.submit(() -> {
-			SSLSocket sslSocket = (SSLSocket) accept;
-			try {
-				sslSocket.startHandshake();
-			} catch (IOException e) {
-				logger.trace(e);
-				return;
-			}
-            if (!"h2".equals(sslSocket.getApplicationProtocol())) {
-			    logger.error("Connection from {} doesn't use HTTP2 protocol!", accept.getInetAddress());
+        try {
+            listenerExecutorService.submit(() -> {
+                SSLSocket sslSocket = (SSLSocket) accept;
                 try {
-                    accept.close();
+                    sslSocket.startHandshake();
                 } catch (IOException e) {
                     logger.trace(e);
+                    return;
                 }
-                return;
-            }
-            try (ClientConnection connection = new ClientConnection(this, accept)) {
-			    connection.proceed();
-            } catch (IOException e) {
-                logger.error("Unable to open a socket! Connection will be dropped.", e);
-            }
-        });
+                if (!"h2".equals(sslSocket.getApplicationProtocol())) {
+                    logger.error("Connection from {} doesn't use HTTP2 protocol!", accept.getInetAddress());
+                    try {
+                        accept.close();
+                    } catch (IOException e) {
+                        logger.trace(e);
+                    }
+                    return;
+                }
+                try (ClientConnection connection = new ClientConnection(this, accept)) {
+                    connection.proceed();
+                } catch (IOException e) {
+                    logger.error("Unable to open a socket! Connection will be dropped.", e);
+                }
+            });
+        } catch (RejectedExecutionException e) {
+            logger.info("Can't accept a new connection from {} due to server shutting down is in process.", accept.getInetAddress());
+        }
     }
 
     public long getNextConnId() {

@@ -15,7 +15,7 @@ import static ru.obolensk.afff.beetle2.protocol.channel.PacketType.PING;
  * Created by Dilmukhamedov_A on 03.07.2018.
  */
 @ToString
-public class PingPacket implements Packet {
+public class PingPacket extends AbstractPacket {
 
 	private final boolean ack;
 
@@ -27,6 +27,7 @@ public class PingPacket implements Packet {
 	}
 
 	public PingPacket(@Nonnull RawPacket rawPacket) {
+		super(rawPacket);
 		ack = false; // should be false for input packet
 		payload = rawPacket.getPayload();
 	}
@@ -50,7 +51,7 @@ public class PingPacket implements Packet {
 
 	@Nonnull
 	@Override
-	public RawPacket getRawPacket() {
+	protected RawPacket createRawPacket() {
 		return new RawPacketBuilder(this)
 				.withFlags(ack ? 1 : 0)
 				.withPayload(payload)

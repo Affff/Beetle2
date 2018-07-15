@@ -34,7 +34,7 @@ class ConsoleClient {
         if (args.length > 2) {
             config.set(Options.SSL_KEYSTORE_PASS, args[2]);
         }
-        config.set(Options.LOG_LEVEL, Level.DEBUG);
+        config.set(Options.LOG_LEVEL, Level.TRACE);
         server = new BeetleServer(config);
         printMenu();
     }

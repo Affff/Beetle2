@@ -13,7 +13,7 @@ public class RawPacketBuilder {
 
 	public RawPacketBuilder(@Nonnull Packet packet) {
 		rawPacket = new RawPacket();
-		rawPacket.setType(packet.getType().getCode());
+		rawPacket.setTypeCode(packet.getType().getCode());
 		rawPacket.setStreamId(packet.getStreamId());
 	}
 

@@ -9,12 +9,11 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
 import ru.obolensk.afff.beetle2.log.Logger;
+import ru.obolensk.afff.beetle2.protocol.stream.packet.GoAwayPacket;
 import ru.obolensk.afff.beetle2.protocol.stream.packet.Packet;
 import ru.obolensk.afff.beetle2.protocol.stream.packet.PingPacket;
 import ru.obolensk.afff.beetle2.protocol.stream.packet.SettingsPacket;
-
-import static ru.obolensk.afff.beetle2.protocol.channel.PacketType.PING;
-import static ru.obolensk.afff.beetle2.protocol.channel.PacketType.SETTINGS;
+import ru.obolensk.afff.beetle2.protocol.stream.packet.WindowUpdatePacket;
 
 /**
  * Created by Dilmukhamedov_A on 03.07.2018.
@@ -46,7 +45,7 @@ public class Http2Channel {
 	public Packet read() throws IOException {
 		RawPacket rawPacket = new RawPacket();
 		rawPacket.setLength(read24bits());
-		rawPacket.setType(inDataStream.read());
+		rawPacket.setTypeCode(inDataStream.read());
 		rawPacket.setFlags(inDataStream.read());
 		rawPacket.setStreamId(Math.abs(inDataStream.readInt())); // ignore first bit (sign)
 		byte[] payload = new byte[rawPacket.getLength()];
@@ -58,20 +57,21 @@ public class Http2Channel {
 	public void write(@Nonnull RawPacketContainer packet) throws IOException {
 		RawPacket rawPacket = packet.getRawPacket();
 		write24bits(rawPacket.getLength());
-		outDataStream.writeByte(rawPacket.getType());
+		outDataStream.writeByte(rawPacket.getTypeCode());
 		outDataStream.writeByte(rawPacket.getFlags());
 		outDataStream.writeInt(rawPacket.getStreamId());
 		outDataStream.write(rawPacket.getPayload());
 	}
 
 	private Packet decode(RawPacket rawPacket) {
-		if (rawPacket.getType() == SETTINGS.getCode()) {
-			return new SettingsPacket(rawPacket);
-		} else if (rawPacket.getType() == PING.getCode()) {
-			return new PingPacket(rawPacket);
-		} else {
-			logger.warn("Received packet with unsupported type: " + rawPacket.getType());
-			return null; // ignore unknown packet
+		switch (rawPacket.getType()) {
+			case SETTINGS: return new SettingsPacket(rawPacket);
+			case PING: return new PingPacket(rawPacket);
+			case GOAWAY: return new GoAwayPacket(rawPacket);
+			case WINDOW_UPDATE: return new WindowUpdatePacket(rawPacket);
+			default:
+				logger.warn("Received packet with unsupported type: " + rawPacket.getType());
+				return null; // ignore unknown packet
 		}
 	}
 

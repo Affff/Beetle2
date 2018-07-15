@@ -8,13 +8,9 @@ import lombok.ToString;
 import ru.obolensk.afff.beetle2.protocol.channel.PacketType;
 import ru.obolensk.afff.beetle2.protocol.channel.RawPacket;
 import ru.obolensk.afff.beetle2.protocol.channel.RawPacketBuilder;
-import ru.obolensk.afff.beetle2.protocol.stream.ErrorCode;
 
 import static ru.obolensk.afff.beetle2.protocol.channel.ByteBufferBuilder.createBuffer;
-import static ru.obolensk.afff.beetle2.protocol.channel.PacketType.GOAWAY;
-import static ru.obolensk.afff.beetle2.protocol.stream.ErrorCode.NO_ERROR;
-import static ru.obolensk.afff.beetle2.protocol.stream.StreamProcessor.MAX_STREAM_ID;
-import static ru.obolensk.afff.beetle2.util.ByteArrayUtil.read4BytesLong;
+import static ru.obolensk.afff.beetle2.protocol.channel.PacketType.WINDOW_UPDATE;
 import static ru.obolensk.afff.beetle2.util.ByteArrayUtil.read4BytesUnsignedInt;
 
 /**
@@ -23,35 +19,28 @@ import static ru.obolensk.afff.beetle2.util.ByteArrayUtil.read4BytesUnsignedInt;
 @Getter
 @RequiredArgsConstructor
 @ToString
-public class GoAwayPacket extends AbstractPacket {
+public class WindowUpdatePacket extends AbstractPacket {
 
-	private final int streamId;
-	private final ErrorCode errorCode;
+	private final int windowSizeIncrement;
 
-	public GoAwayPacket() {
-		this(MAX_STREAM_ID, NO_ERROR);
-	}
-
-	public GoAwayPacket(@Nonnull RawPacket rawPacket) {
+	public WindowUpdatePacket(@Nonnull RawPacket rawPacket) {
 		super(rawPacket);
 		byte[] payload = rawPacket.getPayload();
-		streamId = read4BytesUnsignedInt(payload, 0);
-		errorCode = ErrorCode.valueOf(read4BytesLong(payload, 4));
+		windowSizeIncrement = read4BytesUnsignedInt(payload, 0);
 	}
 
 	@Override
 	public PacketType getType() {
-		return GOAWAY;
+		return WINDOW_UPDATE;
 	}
 
 	@Nonnull
 	@Override
 	protected RawPacket createRawPacket() {
 		return new RawPacketBuilder(this)
-				.withPayload(createBuffer(4 + 4)
-						.with4Bytes(streamId)
-						.with4Bytes(errorCode.getValue())
-						.build())
+				.withPayload(createBuffer(4)
+								.with4Bytes(windowSizeIncrement)
+								.build())
 				.build();
 	}
 }

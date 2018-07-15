@@ -22,7 +22,6 @@ import static ru.obolensk.afff.beetle2.core.ConnectionState.CLOSED;
 import static ru.obolensk.afff.beetle2.core.ConnectionState.OPEN;
 import static ru.obolensk.afff.beetle2.core.ConnectionState.OPEN_READ;
 import static ru.obolensk.afff.beetle2.core.ConnectionState.OPEN_WRITE;
-import static ru.obolensk.afff.beetle2.protocol.channel.Boundary.NOT_A_STREAM;
 import static ru.obolensk.afff.beetle2.protocol.stream.ErrorCode.NO_ERROR;
 import static ru.obolensk.afff.beetle2.settings.Options.AWAIT_CONNECTION_SHUTDOWN_TIMEOUT;
 
@@ -127,34 +126,7 @@ class ClientConnection implements Closeable {
 		try {
 			inOutActive.await();
 		} catch (InterruptedException e) {
-			logger.info("Received terminate signal. Shutting down the connection...");
-			try {
-				http2Channel.write(new GoAwayPacket(NOT_A_STREAM, NO_ERROR));
-			} catch (IOException e1) {
-				logger.trace(e1);
-			}
-			logger.debug("Await for termination...");
-			try {
-				Thread.sleep(connectionShutdownTimeout);
-			} catch (InterruptedException e1) {
-				// doesn't matter
-			}
-			logger.debug("Send final termination packed...");
-			// signal that connection is shut down
-			try {
-				http2Channel.write(new GoAwayPacket(streamProcessor.getLastStreamID(), NO_ERROR));
-			} catch (IOException e1) {
-				logger.trace(e1);
-			}
-			setState(CLOSED);
-			boolean stopped = false;
-			try {
-				stopped = executorService.awaitTermination(connectionShutdownTimeout, MILLISECONDS);
-			} catch (InterruptedException ignored) {
-				// doesn't matter
-			}
-			logger.info(stopped ? "Client connection was stopped."
-								: "Unable to stop client connection!");
+			logger.debug("Received terminate signal. The connection processing loop is shut down.");
 		}
 	}
 
@@ -166,33 +138,58 @@ class ClientConnection implements Closeable {
 		if (toState == OPEN) {
 			throw new IllegalArgumentException("Can't set OPEN state after connection creation!");
 		}
-		if (!state.compareAndSet(OPEN, toState)) {
-			if (state.get() != CLOSED) {
-				logger.trace("Connection is marked CLOSED.");
-				state.set(CLOSED);
+		ConnectionState oldState = state.getAndSet(toState);
+		if (oldState == toState) {
+			return;
+		}
+		switch (toState) {
+			case OPEN_READ: logger.info("Connection mode was changed to read-only."); break;
+			case OPEN_WRITE: logger.info("Connection mode was changed to write-only."); break;
+			case CLOSED: {
+				logger.info("Connection mode was changed to closed.");
 				executorService.shutdownNow();
 				try {
-					socket.close();
+					if (!socket.isClosed()) {
+						socket.close();
+					}
 				} catch (IOException e1) {
 					logger.trace(e1);
 				}
-				logger.info("Connection is shutting down...");
-			}
-		} else {
-			switch (toState) {
-				case OPEN_READ: logger.info("Connection mode changed to read-only."); break;
-				case OPEN_WRITE: logger.info("Connection mode changed to write-only.");
+
+				boolean stopped = false;
+				try {
+					stopped = executorService.awaitTermination(connectionShutdownTimeout, MILLISECONDS);
+				} catch (InterruptedException ignored) {
+					// doesn't matter
+				}
+				logger.info(stopped ? "Client connection was stopped."
+									: "Unable to stop client connection!");
 			}
 		}
 	}
 
 	@Override
-	public void close() throws IOException {
-		if (socket != null) {
-			if (!socket.isClosed()) {
-				socket.close();
-			}
-			logger.info("Client {} disconnected from server.", socket.getInetAddress());
+	public void close() {
+		logger.debug("Connection is being closed.");
+		try {
+			http2Channel.write(new GoAwayPacket());
+		} catch (IOException e1) {
+			logger.trace(e1);
 		}
+		logger.debug("Await for termination...");
+		try {
+			Thread.sleep(connectionShutdownTimeout);
+		} catch (InterruptedException e1) {
+			// doesn't matter
+		}
+		// signal that connection is shut down
+		try {
+			http2Channel.write(new GoAwayPacket(streamProcessor.getLastStreamID(), NO_ERROR));
+		} catch (IOException e1) {
+			logger.trace(e1);
+		}
+		logger.debug("Final termination packet was sent to client.");
+		setState(CLOSED);
+		logger.info("Client {} disconnected from server.", socket.getInetAddress());
 	}
 }
